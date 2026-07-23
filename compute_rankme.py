@@ -47,6 +47,48 @@ def stable_rank(Z: torch.Tensor) -> float:
 
 
 # --------------------------------------------------------------------------- #
+# intrinsic-dimension metrics (computed on a random subsample for tractability)
+# --------------------------------------------------------------------------- #
+@torch.no_grad()
+def twonn(Z: torch.Tensor, n_sub: int = 2000, discard_frac: float = 0.1) -> float:
+    """TwoNN intrinsic-dimension estimator (Facco et al., 2017). Uses the ratio of the
+    2nd- to 1st-nearest-neighbour distance per point, then a through-origin fit of
+    -log(1 - F(mu)) vs log(mu). Lower = lower intrinsic dimension."""
+    Z = Z.to(torch.float32)
+    if Z.size(0) > n_sub:
+        Z = Z[torch.randperm(Z.size(0))[:n_sub]]
+    D = torch.cdist(Z, Z)
+    D.fill_diagonal_(float("inf"))
+    r1, a1 = D.min(dim=1)
+    D[torch.arange(D.size(0)), a1] = float("inf")   # mask the 1st NN to get the 2nd
+    r2, _ = D.min(dim=1)
+    mu = r2 / r1.clamp_min(1e-12)
+    mu = mu[torch.isfinite(mu) & (mu > 1)]
+    mu, _ = torch.sort(mu)
+    n = mu.numel()
+    F = torch.arange(1, n + 1, dtype=torch.float32, device=mu.device) / n
+    keep = int(n * (1 - discard_frac))              # drop the noisy tail
+    x = torch.log(mu[:keep])
+    y = -torch.log((1 - F[:keep]).clamp_min(1e-12))
+    return float((x * y).sum() / (x * x).sum())     # slope through origin = d
+
+
+@torch.no_grad()
+def mle_id(Z: torch.Tensor, k: int = 20, n_sub: int = 2000) -> float:
+    """Levina-Bickel MLE intrinsic-dimension estimate over k nearest neighbours."""
+    Z = Z.to(torch.float32)
+    if Z.size(0) > n_sub:
+        Z = Z[torch.randperm(Z.size(0))[:n_sub]]
+    D = torch.cdist(Z, Z)
+    D.fill_diagonal_(float("inf"))
+    knn, _ = torch.sort(D, dim=1)
+    knn = knn[:, :k].clamp_min(1e-12)
+    logs = torch.log(knn[:, -1:] / knn[:, :-1]).sum(dim=1)
+    m = (k - 1) / logs.clamp_min(1e-12)
+    return float(m[torch.isfinite(m)].mean())
+
+
+# --------------------------------------------------------------------------- #
 # backbone
 # --------------------------------------------------------------------------- #
 def build_cifar_resnet18() -> torch.nn.Module:
@@ -150,6 +192,8 @@ def main():
     print(f"embeddings: {tuple(Z.shape)}")
     print(f"RankMe:       {rankme(Z):8.3f}")
     print(f"stable_rank:  {stable_rank(Z):8.3f}")
+    print(f"TwoNN_id:     {twonn(Z):8.3f}")
+    print(f"MLE_id:       {mle_id(Z):8.3f}")
 
 
 if __name__ == "__main__":
