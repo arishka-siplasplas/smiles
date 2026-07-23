@@ -13,25 +13,25 @@ Run:  python generate_configs.py
 import os
 
 # --- knobs ------------------------------------------------------------------
-# 20 epochs — fast pass for the quality-spread study (~8-12 min/model on a Kaggle GPU).
-# Bump higher only if the team later wants the literature number.
-EPOCHS = 20
+LR = 0.3   # fixed at solo-learn's tuned value
 TAU = 0.5  # temperature for the exp/ctr LogSumExp criterion — VERIFY vs paper App. L
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
-# --- the 5-model hyperparameter sweep (applied to every method) -------------
-# HYPERPARAMETER = pretraining learning rate (universal across all SSL methods, so the
-# whole group varies the SAME knob -> cross-method comparison is apples-to-apples; this
-# is also the axis RankMe sweeps). Everything else is fixed at solo-learn's tuned values.
-# grid: {0.1, 0.2, 0.3, 0.5, 1.0}, base = 0.3
-# (suffix, lr, note)
+# --- the 5-model sweep (applied to every method) ----------------------------
+# VARIED AXIS = training DURATION (number of epochs), at fixed lr=0.3. This is the
+# paper's VICReg experiment (IdEst Fig 5a): as epochs increase, linear accuracy rises
+# and IdEst falls -> a REAL spread of representation qualities and a clean negative
+# IdEst<->accuracy correlation. (Varying lr alone barely moves quality under LARS, so it
+# produced no spread — hence this axis instead.)
+# grid: {2, 5, 10, 20, 40} epochs
+# (suffix, epochs, note)
 VARIANTS = [
-    ("lr0p1", 0.1, "low LR"),
-    ("lr0p2", 0.2, "below default"),
-    ("lr0p3", 0.3, "default / reference (solo-learn tuned)"),
-    ("lr0p5", 0.5, "above default"),
-    ("lr1p0", 1.0, "high LR (expected degraded)"),
+    ("ep2",   2,  "very undertrained (worst)"),
+    ("ep5",   5,  "undertrained"),
+    ("ep10", 10,  "mid"),
+    ("ep20", 20,  "good"),
+    ("ep40", 40,  "most trained (best)"),
 ]
 
 METHODS = [
@@ -103,7 +103,7 @@ augmentations:
 optimizer:
   name: "lars"
   batch_size: 256
-  lr: {lr}
+  lr: 0.3
   classifier_lr: 0.1
   weight_decay: 1e-4
   kwargs:
@@ -133,14 +133,13 @@ def main():
     for folder, method_name, needs_tau in METHODS:
         out_dir = os.path.join(ROOT, folder, "configs")
         os.makedirs(out_dir, exist_ok=True)
-        for suffix, lr, note in VARIANTS:
+        for suffix, epochs, note in VARIANTS:
             tau_line = f"\n  tau: {TAU}" if needs_tau else ""
             cfg = TEMPLATE.format(
-                note=f"{method_name} / cifar100 / {suffix} (lr={lr}): {note}",
+                note=f"{method_name} / cifar100 / {suffix} ({epochs} epochs): {note}",
                 name=f"{method_name}-cifar100-{suffix}",
                 method=method_name,
-                lr=lr,
-                tau_line=tau_line, epochs=EPOCHS,
+                tau_line=tau_line, epochs=epochs,
             )
             path = os.path.join(out_dir, f"cifar100_{suffix}.yaml")
             with open(path, "w") as f:
