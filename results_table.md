@@ -8,8 +8,22 @@ Label-free geometric quality metrics on the frozen embeddings:
 `IdEst` (dim_MST, paper's main metric), `RankMe` (effective rank), `TwoNN` (intrinsic dim).
 `acc` = linear-probe top-1 accuracy. Goal: does a metric track `acc` across the runs?
 
-Raw numbers: [`results/vicreg_lr.csv`](results/vicreg_lr.csv),
+Raw numbers: [`results/vicreg.csv`](results/vicreg.csv),
+[`results/vicreg_lr.csv`](results/vicreg_lr.csv),
 [`results/vicreg_exp.csv`](results/vicreg_exp.csv), [`results/vicreg_ctr.csv`](results/vicreg_ctr.csv).
+
+## VICReg — epochs sweep (2/5/10/20/40, lr=0.3) ✅ main result
+Valid test: accuracy spans 36.8 → 58.9%. RankMe vs acc ρ = +1.00 (RankMe reproduced). IdEst vs acc
+ρ = +0.90 — positive here (short-training regime, ID still rising; peaks ~ep20, dips at ep40),
+whereas the paper reports a negative correlation that appears only later (~100+ epochs).
+
+| epochs | IdEst | RankMe | TwoNN | acc  |
+|--------|-------|--------|-------|------|
+| 2      | 13.44 | 156.9  | 14.49 | 36.8 |
+| 5      | 13.85 | 157.9  | 14.68 | 45.6 |
+| 10     | 14.02 | 184.0  | 14.93 | 50.1 |
+| 20     | 14.13 | 235.0  | 15.93 | 54.9 |
+| 40     | 14.05 | 294.1  | 15.63 | 58.9 |
 
 ## VICReg — lr sweep (20 epochs, lr ∈ {0.1…1.0})
 Under LARS accuracy barely moved (~52.8–53.9%, ~1% spread), so this axis has no quality spread to
