@@ -76,7 +76,7 @@ checkpoint:
 auto_resume:
   enabled: True
 
-max_epochs: 50
+max_epochs: 20
 devices: [0]
 sync_batchnorm: True
 accelerator: "gpu"

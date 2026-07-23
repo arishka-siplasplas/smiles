@@ -13,9 +13,9 @@ Run:  python generate_configs.py
 import os
 
 # --- knobs ------------------------------------------------------------------
-# Supervisor: 50 epochs is enough. Gives a clean quality spread fast (~15-20 min/model
-# on a Kaggle GPU). Bump higher only if the team later wants the literature number.
-EPOCHS = 50
+# 20 epochs — fast pass for the quality-spread study (~8-12 min/model on a Kaggle GPU).
+# Bump higher only if the team later wants the literature number.
+EPOCHS = 20
 TAU = 0.5  # temperature for the exp/ctr LogSumExp criterion — VERIFY vs paper App. L
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
