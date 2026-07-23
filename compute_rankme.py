@@ -21,7 +21,9 @@ Examples
                              --data ./datasets --n 25600
 """
 import argparse
+import math
 
+import numpy as np
 import torch
 
 
@@ -86,6 +88,50 @@ def mle_id(Z: torch.Tensor, k: int = 20, n_sub: int = 2000) -> float:
     logs = torch.log(knn[:, -1:] / knn[:, :-1]).sum(dim=1)
     m = (k - 1) / logs.clamp_min(1e-12)
     return float(m[torch.isfinite(m)].mean())
+
+
+def _mst_length_from_D(D: np.ndarray) -> float:
+    """Total edge length of the MST of a dense distance matrix, via Prim's algorithm."""
+    n = D.shape[0]
+    visited = np.zeros(n, dtype=bool)
+    min_edge = np.full(n, np.inf)
+    min_edge[0] = 0.0
+    total = 0.0
+    for _ in range(n):
+        u = np.argmin(np.where(visited, np.inf, min_edge))
+        visited[u] = True
+        total += min_edge[u]
+        row = D[u]
+        upd = (~visited) & (row < min_edge)
+        min_edge[upd] = row[upd]
+    return float(total)
+
+
+@torch.no_grad()
+def dim_mst(Z: torch.Tensor, n_repeats: int = 5, max_size: int = 4000,
+            n_sizes: int = 8, seed: int = 0) -> float:
+    """IdEst — intrinsic dimension via the Minimum Spanning Tree (Mordacq et al., 2026).
+
+    MST length scales as  log L(MST(X_n)) ~ (d-1)/d * log(n) + const  (Costa & Hero, 2006).
+    We fit that slope m over subsamples of increasing size and return d = 1 / (1 - m).
+    Lower dim_MST = better representation (the paper's Finding 1: negatively correlates
+    with linear-probe accuracy)."""
+    Z = Z.to(torch.float32)
+    N = Z.size(0)
+    top = min(N, max_size)
+    sizes = sorted({int(x) for x in np.geomspace(100, top, n_sizes) if x <= N})
+    g = torch.Generator().manual_seed(seed)
+    logn, logL = [], []
+    for n in sizes:
+        lengths = []
+        for _ in range(n_repeats):
+            idx = torch.randperm(N, generator=g)[:n]
+            D = torch.cdist(Z[idx], Z[idx]).cpu().numpy()
+            lengths.append(_mst_length_from_D(D))
+        logn.append(math.log(n))
+        logL.append(math.log(sum(lengths) / len(lengths)))
+    m = float(np.polyfit(logn, logL, 1)[0])         # slope = (d-1)/d
+    return 1.0 / (1.0 - m)
 
 
 # --------------------------------------------------------------------------- #
@@ -190,10 +236,11 @@ def main():
 
     Z = extract_embeddings(model, loader, device, args.n)
     print(f"embeddings: {tuple(Z.shape)}")
+    print(f"IdEst(dimMST):{dim_mst(Z):8.3f}   <-- paper's main metric (lower = better)")
     print(f"RankMe:       {rankme(Z):8.3f}")
     print(f"stable_rank:  {stable_rank(Z):8.3f}")
-    print(f"TwoNN_id:     {twonn(Z):8.3f}")
-    print(f"MLE_id:       {mle_id(Z):8.3f}")
+    print(f"TwoNN_id:     {twonn(Z):8.3f}   (paper baseline — unreliable)")
+    print(f"MLE_id:       {mle_id(Z):8.3f}   (paper baseline — unreliable)")
 
 
 if __name__ == "__main__":
