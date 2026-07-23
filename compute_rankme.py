@@ -138,13 +138,18 @@ def dim_mst(Z: torch.Tensor, n_repeats: int = 5, max_size: int = 4000,
 # backbone
 # --------------------------------------------------------------------------- #
 def build_cifar_resnet18() -> torch.nn.Module:
-    """torchvision ResNet-18 with the CIFAR stem solo-learn uses (3x3 conv1, no maxpool),
-    fc replaced by Identity -> 512-d features."""
+    """torchvision ResNet-18 with the EXACT CIFAR stem solo-learn uses, so the frozen
+    features match what the model saw during training/eval:
+        conv1 = 3x3, stride 1, padding 2, no bias   (solo/methods/base.py)
+        maxpool = Identity
+        fc = Identity  -> 512-d features
+    NOTE: padding MUST be 2 (not 1) to match solo-learn — a mismatch silently loads the
+    weights but runs the net on a different spatial map, degrading every downstream number."""
     import torch.nn as nn
     from torchvision.models import resnet18
 
     net = resnet18(weights=None)
-    net.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    net.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=2, bias=False)
     net.maxpool = nn.Identity()
     net.fc = nn.Identity()
     return net
